@@ -543,7 +543,6 @@ void forkret(void)
 
   usertrapret();
 }
-
 int co_yield(int pid, int value)
 {
   struct proc *p;
@@ -551,30 +550,34 @@ int co_yield(int pid, int value)
 
   for (p = proc; p < &proc[NPROC]; p++)
   {
-    if (p != myproc() && p->pid == pid)
+    acquire(&p->lock);
+    if (p->pid == pid && p->state != UNUSED)
     {
-      acquire(&p->lock);
-      if (p->state == UNUSED || p->killed)
+      if (p->state == SLEEPING && p->chan == (void *)myp)
       {
-        release(&p->lock);
-        return -1;
+        p->trapframe->a0 = value;
+        p->state = RUNNABLE;
       }
-      if (p->state == SLEEPING && p->chan == myp)
-      {
-        p->trapframe->a0 = value; // set return value for the sleeping process
-        p->state = RUNNABLE;      // set the sleeping process to runnable
-      }
+
       release(&p->lock);
+
       acquire(&myp->lock);
-      sleep(p, &myp->lock); // sleep until the yielding process is scheduled again
+      myp->chan = (void *)p;
+      myp->state = SLEEPING;
+
+      sched();
+      myp->chan = 0;
       if (myp->killed)
       {
         release(&myp->lock);
         return -1;
       }
+
+      int res = myp->trapframe->a0;
       release(&myp->lock);
-      return myp->trapframe->a0; // return the value set by the sleeping process
+      return res;
     }
+    release(&p->lock);
   }
   return -1;
 }

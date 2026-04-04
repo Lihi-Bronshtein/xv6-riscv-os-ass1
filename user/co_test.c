@@ -14,15 +14,15 @@ int main(int argc, char *argv[])
 
     if (pid2 == 0)
     { // Child
-        for (int i = 0; i < 5; i++)
-        { // הגבלנו ל-5 פעמים כדי שהטסט יסתיים
+        for (;;)
+        {
             int value = co_yield(pid1, 1);
             printf("Child received: %d\n", value);
         }
     }
     else
     { // Parent
-        for (int i = 0; i < 5; i++)
+        for (;;)
         {
             int value = co_yield(pid2, 2);
             printf("parent received: %d\n", value);
