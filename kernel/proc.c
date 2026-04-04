@@ -572,14 +572,6 @@ int co_yield(int pid, int value)
         release(&myp->lock);
         return -1;
       }
-      // Re-check target validity after wakeup
-      acquire(&p->lock);
-      if (p->pid != pid || p->state == UNUSED || p->killed)
-      {
-        release(&p->lock);
-        return -1;
-      }
-      release(&p->lock);
       release(&myp->lock);
       return myp->trapframe->a0; // return the value set by the sleeping process
     }
