@@ -554,24 +554,37 @@ int co_yield(int pid, int value)
     if (p != myproc() && p->pid == pid)
     {
       acquire(&p->lock);
+      if (p->state == UNUSED || p->killed)
+      {
+        release(&p->lock);
+        return -1;
+      }
       if (p->state == SLEEPING && p->chan == myp)
       {
         p->trapframe->a0 = value; // set return value for the sleeping process
         p->state = RUNNABLE;      // set the sleeping process to runnable
       }
-      else if (p->killed != 0)
-      {
-        release(&p->lock);
-        return -1; // return -1 if the target process is killed
-      }
       release(&p->lock);
       acquire(&myp->lock);
-      sleep(p, &myp->lock); // sleep on the process's lock
+      sleep(p, &myp->lock); // sleep until the yielding process is scheduled again
+      if (myp->killed)
+      {
+        release(&myp->lock);
+        return -1;
+      }
+      // Re-check target validity after wakeup
+      acquire(&p->lock);
+      if (p->pid != pid || p->state == UNUSED || p->killed)
+      {
+        release(&p->lock);
+        return -1;
+      }
+      release(&p->lock);
       release(&myp->lock);
       return myp->trapframe->a0; // return the value set by the sleeping process
     }
   }
-  return -1; // return -1 if no such process is found
+  return -1;
 }
 
 // Atomically release lock and sleep on chan.

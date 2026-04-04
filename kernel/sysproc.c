@@ -21,6 +21,10 @@ sys_co_yield(void)
   int pid, value;
   argint(0, &pid);
   argint(1, &value);
+  if (pid < 0 || value < 0)
+  {
+    return -1;
+  }
   return co_yield(pid, value);
 }
 
