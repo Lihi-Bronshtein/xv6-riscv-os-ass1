@@ -548,6 +548,7 @@ int co_yield(int pid, int value)
 {
   struct proc *p;
   struct proc *myp = myproc();
+
   for (p = proc; p < &proc[NPROC]; p++)
   {
     if (p != myproc() && p->pid == pid)
@@ -556,12 +557,21 @@ int co_yield(int pid, int value)
       if (p->state == SLEEPING && p->chan == myp)
       {
         p->trapframe->a0 = value; // set return value for the sleeping process
-        p->state = RUNNING;
+        p->state = RUNNABLE;      // set the sleeping process to runnable
       }
-      myp->state = RUNNABLE; // set current process to runnable
+      else if (p->killed != 0)
+      {
+        release(&p->lock);
+        return -1; // return -1 if the target process is killed
+      }
       release(&p->lock);
+      acquire(&myp->lock);
+      sleep(p, &myp->lock); // sleep on the process's lock
+      release(&myp->lock);
+      return myp->trapframe->a0; // return the value set by the sleeping process
     }
   }
+  return -1; // return -1 if no such process is found
 }
 
 // Atomically release lock and sleep on chan.
