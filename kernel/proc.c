@@ -548,37 +548,71 @@ int co_yield(int pid, int value)
   struct proc *p;
   struct proc *myp = myproc();
 
+  // Error checking: invalid pid or attempt to yield to oneself
+  if (pid <= 0 || pid == myp->pid)
+  {
+    return -1;
+  }
+
+  // Iterate over the process table to find the target process
   for (p = proc; p < &proc[NPROC]; p++)
   {
     acquire(&p->lock);
+    
+    // Target process found
     if (p->pid == pid && p->state != UNUSED)
     {
+      // If the target process was killed, release lock and return error
+      if (p->killed)
+      {
+        release(&p->lock);
+        return -1;
+      }
+
+      // Check if the target process is already sleeping and waiting for us
       if (p->state == SLEEPING && p->chan == (void *)myp)
       {
+        // Pass our value to the target's a0 register so it receives it upon waking up
         p->trapframe->a0 = value;
+        
+        // Wake up the target process (for Step 1, we use the standard RUNNABLE state)
         p->state = RUNNABLE;
       }
 
       release(&p->lock);
 
+      // In all cases (whether the target was waiting or not),
+      // we must put ourselves to sleep and wait to be yielded back to.
       acquire(&myp->lock);
       myp->chan = (void *)p;
       myp->state = SLEEPING;
 
-      sched();
+      // Call the standard scheduler to handle the context switch (Step 1 approach)
+      sched(); 
+
+      // We woke up! (The other process called co_yield on us)
+      // Tidy up the channel
       myp->chan = 0;
+
+      // Check if we were killed while sleeping
       if (myp->killed)
       {
         release(&myp->lock);
         return -1;
       }
 
+      // The value passed by the yielding process is already waiting in our a0 register
       int res = myp->trapframe->a0;
       release(&myp->lock);
-      return res;
+      
+      // Function completed successfully
+      return res; 
     }
+    
     release(&p->lock);
   }
+
+  // If the loop finishes and the target PID was not found
   return -1;
 }
 
