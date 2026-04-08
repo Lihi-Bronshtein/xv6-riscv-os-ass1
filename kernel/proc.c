@@ -548,7 +548,7 @@ int co_yield(int pid, int value)
   struct proc *p;
   struct proc *myp = myproc();
 
-  // Error checking: invalid pid or attempt to yield to oneself
+  // Error checking(c case in page 13): invalid pid or attempt to yield to oneself
   if (pid <= 0 || pid == myp->pid)
   {
     return -1;
@@ -562,36 +562,46 @@ int co_yield(int pid, int value)
     // Target process found
     if (p->pid == pid && p->state != UNUSED)
     {
-      // If the target process was killed, release lock and return error
+      // If the target process was killed (b case in page 13)
       if (p->killed)
       {
         release(&p->lock);
         return -1;
       }
 
-      // Check if the target process is already sleeping and waiting for us
+      // Check if the target process is already sleeping on our channel
       if (p->state == SLEEPING && p->chan == (void *)myp)
       {
         // Pass our value to the target's a0 register so it receives it upon waking up
         p->trapframe->a0 = value;
-
         p->state = RUNNING;
 
+        // Prepare current process to go to sleep
         acquire(&myp->lock);
         myp->chan = (void *)p;
         myp->state = SLEEPING;
+
+        // Manually update the CPU to run the target process(direct process switching without going through the scheduler)
         mycpu()->proc = p;
+
+        // The target process 'p' is already held (locked) by us and will
+        // release its own lock after it wakes up and finishes its yield.
         release(&myp->lock);
 
         swtch(&myp->context, &p->context);
       }
+      // the first itteration of where the target process is found but it is not sleeping on our channel
       else
       {
         release(&p->lock);
-
+        // Prepare current process to go to sleep
         acquire(&myp->lock);
         myp->chan = (void *)p;
         myp->state = SLEEPING;
+        // If the target process is not waiting for us, we cannot perform a direct switch.
+        // Release the target's lock and put ourselves to sleep using the standard
+        // scheduler mechanism. This ensures we wait until the target process eventually
+        // calls co_yield on us.
         sched();
       }
 
@@ -617,7 +627,7 @@ int co_yield(int pid, int value)
     release(&p->lock);
   }
 
-  // If the loop finishes and the target PID was not found
+  // If the loop finishes and the target PID was not found(case a in page 13)
   return -1;
 }
 
