@@ -575,19 +575,15 @@ int co_yield(int pid, int value)
         // Pass our value to the target's a0 register so it receives it upon waking up
         p->trapframe->a0 = value;
 
-        //
         p->state = RUNNING;
 
         acquire(&myp->lock);
         myp->chan = (void *)p;
         myp->state = SLEEPING;
         mycpu()->proc = p;
-        release(&p->lock);
         release(&myp->lock);
 
-        //
         swtch(&myp->context, &p->context);
-        acquire(&myp->lock);
       }
       else
       {
