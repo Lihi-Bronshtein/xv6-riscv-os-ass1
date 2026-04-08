@@ -590,7 +590,7 @@ int co_yield(int pid, int value)
       // Call the standard scheduler to handle the context switch (Step 1 approach)
       sched(); 
 
-      // We woke up! (The other process called co_yield on us)
+      // We woke up (The other process called co_yield on us)
       // Tidy up the channel
       myp->chan = 0;
 
