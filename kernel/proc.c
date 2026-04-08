@@ -558,7 +558,7 @@ int co_yield(int pid, int value)
   for (p = proc; p < &proc[NPROC]; p++)
   {
     acquire(&p->lock);
-    
+
     // Target process found
     if (p->pid == pid && p->state != UNUSED)
     {
@@ -574,21 +574,30 @@ int co_yield(int pid, int value)
       {
         // Pass our value to the target's a0 register so it receives it upon waking up
         p->trapframe->a0 = value;
-        
-        // Wake up the target process (for Step 1, we use the standard RUNNABLE state)
-        p->state = RUNNABLE;
+
+        //
+        p->state = RUNNING;
+
+        acquire(&myp->lock);
+        myp->chan = (void *)p;
+        myp->state = SLEEPING;
+        mycpu()->proc = p;
+        release(&p->lock);
+        release(&myp->lock);
+
+        //
+        swtch(&myp->context, &p->context);
+        acquire(&myp->lock);
       }
+      else
+      {
+        release(&p->lock);
 
-      release(&p->lock);
-
-      // In all cases (whether the target was waiting or not),
-      // we must put ourselves to sleep and wait to be yielded back to.
-      acquire(&myp->lock);
-      myp->chan = (void *)p;
-      myp->state = SLEEPING;
-
-      // Call the standard scheduler to handle the context switch (Step 1 approach)
-      sched(); 
+        acquire(&myp->lock);
+        myp->chan = (void *)p;
+        myp->state = SLEEPING;
+        sched();
+      }
 
       // We woke up (The other process called co_yield on us)
       // Tidy up the channel
@@ -604,11 +613,11 @@ int co_yield(int pid, int value)
       // The value passed by the yielding process is already waiting in our a0 register
       int res = myp->trapframe->a0;
       release(&myp->lock);
-      
+
       // Function completed successfully
-      return res; 
+      return res;
     }
-    
+
     release(&p->lock);
   }
 
