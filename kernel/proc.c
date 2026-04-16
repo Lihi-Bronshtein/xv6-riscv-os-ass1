@@ -588,7 +588,9 @@ int co_yield(int pid, int value)
         // release its own lock after it wakes up and finishes its yield.
         release(&myp->lock);
 
+        int intena = mycpu()->intena;
         swtch(&myp->context, &p->context);
+        mycpu()->intena = intena;
       }
       // the first itteration of where the target process is found but it is not sleeping on our channel
       else
@@ -602,7 +604,9 @@ int co_yield(int pid, int value)
         // Release the target's lock and put ourselves to sleep using the standard
         // scheduler mechanism. This ensures we wait until the target process eventually
         // calls co_yield on us.
-        sched();
+        int intena = mycpu()->intena;
+        swtch(&myp->context, &mycpu()->context);
+        mycpu()->intena = intena;
       }
 
       // We woke up (The other process called co_yield on us)
