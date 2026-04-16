@@ -555,8 +555,13 @@ int co_yield(int pid, int value)
   }
 
   // Iterate over the process table to find the target process
+
   for (p = proc; p < &proc[NPROC]; p++)
   {
+    if (p == myp)
+    {
+      continue;
+    }
     acquire(&p->lock);
 
     // Target process found
@@ -587,26 +592,33 @@ int co_yield(int pid, int value)
         // The target process 'p' is already held (locked) by us and will
         // release its own lock after it wakes up and finishes its yield.
         release(&myp->lock);
-
         int intena = mycpu()->intena;
         swtch(&myp->context, &p->context);
         mycpu()->intena = intena;
       }
       // the first itteration of where the target process is found but it is not sleeping on our channel
-      else
+      else if (p->state == RUNNABLE)
       {
-        release(&p->lock);
         // Prepare current process to go to sleep
         acquire(&myp->lock);
         myp->chan = (void *)p;
         myp->state = SLEEPING;
+
+        mycpu()->proc = p;
+
+        release(&myp->lock);
         // If the target process is not waiting for us, we cannot perform a direct switch.
         // Release the target's lock and put ourselves to sleep using the standard
         // scheduler mechanism. This ensures we wait until the target process eventually
         // calls co_yield on us.
         int intena = mycpu()->intena;
-        swtch(&myp->context, &mycpu()->context);
+        swtch(&myp->context, &p->context);
         mycpu()->intena = intena;
+      }
+      else
+      {
+        release(&p->lock);
+        return -1;
       }
 
       // We woke up (The other process called co_yield on us)
