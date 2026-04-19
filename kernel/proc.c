@@ -482,8 +482,12 @@ void scheduler(void)
         // It should have changed its p->state before coming back.
         struct proc *rp = c->proc;
         c->proc = 0;
-        release(&rp->lock);
-        continue;
+        if (holding(&rp->lock))
+        {
+          // interupt during direct switch
+          release(&rp->lock);
+          continue;
+        }
       }
       release(&p->lock);
     }
@@ -591,7 +595,7 @@ int co_yield(int pid, int value)
         // Manually update the CPU to run the target process(direct process switching without going through the scheduler)
         mycpu()->proc = p;
 
-        // The target process 'p' is already held (locked) by us and will
+        // The target process 'p' is held (locked) and will
         // release its own lock after it wakes up and finishes its yield.
         int intena = mycpu()->intena;
         swtch(&myp->context, &p->context);
@@ -605,11 +609,6 @@ int co_yield(int pid, int value)
         myp->state = SLEEPING;
 
         mycpu()->proc = p;
-
-        // If the target process is not waiting for us, we cannot perform a direct switch.
-        // Release the target's lock and put ourselves to sleep using the standard
-        // scheduler mechanism. This ensures we wait until the target process eventually
-        // calls co_yield on us.
         int intena = mycpu()->intena;
         swtch(&myp->context, &p->context);
         mycpu()->intena = intena;
