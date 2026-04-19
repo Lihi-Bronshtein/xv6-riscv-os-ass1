@@ -480,7 +480,10 @@ void scheduler(void)
 
         // Process is done running for now.
         // It should have changed its p->state before coming back.
+        struct proc *rp = c->proc;
         c->proc = 0;
+        release(&rp->lock);
+        continue;
       }
       release(&p->lock);
     }
@@ -581,8 +584,7 @@ int co_yield(int pid, int value)
         p->trapframe->a0 = value;
         p->state = RUNNING;
 
-        // Prepare current process to go to sleep
-        acquire(&myp->lock);
+        // Prepare current process to go to sleep - only one cpu no race condition on myp
         myp->chan = (void *)p;
         myp->state = SLEEPING;
 
@@ -591,7 +593,6 @@ int co_yield(int pid, int value)
 
         // The target process 'p' is already held (locked) by us and will
         // release its own lock after it wakes up and finishes its yield.
-        release(&myp->lock);
         int intena = mycpu()->intena;
         swtch(&myp->context, &p->context);
         mycpu()->intena = intena;
@@ -600,13 +601,11 @@ int co_yield(int pid, int value)
       else if (p->state == RUNNABLE)
       {
         // Prepare current process to go to sleep
-        acquire(&myp->lock);
         myp->chan = (void *)p;
         myp->state = SLEEPING;
 
         mycpu()->proc = p;
 
-        release(&myp->lock);
         // If the target process is not waiting for us, we cannot perform a direct switch.
         // Release the target's lock and put ourselves to sleep using the standard
         // scheduler mechanism. This ensures we wait until the target process eventually

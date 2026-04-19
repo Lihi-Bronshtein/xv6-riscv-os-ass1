@@ -88,7 +88,7 @@ int main(int argc, char *argv[])
     if (pid2 == 0)
     {
 
-        for (int i = 0; i < 5; i++)
+        for (;;)
         {
             int value = co_yield(pid1, 1);
             printf("Child received: %d\n", value);
@@ -98,7 +98,7 @@ int main(int argc, char *argv[])
     else
     {
 
-        for (int i = 0; i < 5; i++)
+        for (;;)
         {
             int value = co_yield(pid2, 2);
             printf("parent received: %d\n", value);
